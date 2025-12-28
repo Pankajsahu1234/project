@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { ChevronRight, Banknote, Copy, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, Banknote, Loader } from 'lucide-react';
 
 interface Product {
   image: string;
@@ -23,49 +23,33 @@ export default function PaymentGateway() {
   const PAYEE_NAME = import.meta.env.VITE_PAYEE_NAME || 'Store Name';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [showManualPayment, setShowManualPayment] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isProcessing) {
+        setIsProcessing(false);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isProcessing]);
 
   const handleUPIPayment = () => {
     setIsLoading(true);
-
     const amount = totalAmount.toFixed(2);
     const transactionNote = `Order: ${product.title.substring(0, 30)}`;
-
     const upiLink = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
 
-    console.log('Generated UPI Link:', upiLink);
+    console.log('Opening UPI App with link:', upiLink);
 
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    setIsProcessing(true);
+    window.location.href = upiLink;
 
-    if (isMobile) {
-      const intentLink = `intent://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
-
-      window.location.href = intentLink;
-
-      setTimeout(() => {
-        const confirmPayment = window.confirm(
-          'Payment completed? Click OK if payment was successful, or Cancel to try again.'
-        );
-
-        if (confirmPayment) {
-          alert('Order placed successfully! We will verify your payment and process your order.');
-          navigate('/');
-        } else {
-          setShowManualPayment(true);
-        }
-      }, 5000);
-    } else {
-      setShowManualPayment(true);
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleCopyUPI = () => {
-    navigator.clipboard.writeText(UPI_ID);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
   };
 
   const handleCOD = () => {
@@ -77,14 +61,14 @@ export default function PaymentGateway() {
     {
       id: 'gpay',
       name: 'Google Pay / PhonePe',
-      subtitle: 'UPI Payment',
+      subtitle: 'UPI Payment - Opens instantly',
       icon: 'https://www.gstatic.com/images/branding/product/1x/gpay_48dp.png',
       action: handleUPIPayment,
     },
     {
       id: 'upi',
       name: 'Any UPI App',
-      subtitle: 'Paytm, BHIM, etc.',
+      subtitle: 'Paytm, BHIM, etc. - Opens instantly',
       icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/200px-UPI-Logo-vector.svg.png',
       action: handleUPIPayment,
     },
@@ -96,6 +80,31 @@ export default function PaymentGateway() {
       action: handleCOD,
     },
   ];
+
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-8 text-center">
+          <div className="flex justify-center mb-6">
+            <Loader className="w-12 h-12 text-orange-600 animate-spin" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Opening UPI App</h2>
+          <p className="text-gray-600 mb-4">Your UPI app is opening. Please complete the payment.</p>
+          <p className="text-sm text-gray-500">Amount: Rs. {totalAmount}</p>
+          <p className="text-sm text-gray-500 mt-2">Receiving UPI: {UPI_ID}</p>
+          <button
+            onClick={() => {
+              setIsProcessing(false);
+              setIsLoading(false);
+            }}
+            className="mt-6 w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -149,62 +158,6 @@ export default function PaymentGateway() {
           <span className="text-orange-600">Rs. {totalAmount}</span>
         </div>
       </div>
-
-      {showManualPayment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Complete UPI Payment</h3>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-800 mb-3">
-                1. Open any UPI app (Google Pay, PhonePe, Paytm, BHIM)
-              </p>
-              <p className="text-sm text-blue-800 mb-3">
-                2. Send money to this UPI ID:
-              </p>
-
-              <div className="bg-white border-2 border-blue-300 rounded-lg p-3 flex items-center justify-between">
-                <span className="font-bold text-lg text-gray-900">{UPI_ID}</span>
-                <button
-                  onClick={handleCopyUPI}
-                  className="ml-2 p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                >
-                  {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                </button>
-              </div>
-
-              <p className="text-sm text-blue-800 mt-3">
-                3. Amount to pay: <span className="font-bold">Rs. {totalAmount}</span>
-              </p>
-              <p className="text-sm text-blue-800 mt-2">
-                4. After payment, click "Payment Done" below
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  alert('Thank you! We will verify your payment and process your order shortly.');
-                  navigate('/');
-                }}
-                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
-              >
-                Payment Done
-              </button>
-              <button
-                onClick={() => setShowManualPayment(false)}
-                className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-500 text-center mt-4">
-              After payment, keep the transaction ID for verification
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
