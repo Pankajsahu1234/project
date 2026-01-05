@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { ChevronRight, Banknote, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, Banknote, Loader } from 'lucide-react';
 
 interface Product {
   image: string;
@@ -22,23 +22,50 @@ export default function PaymentGateway() {
   const MERCHANT_NAME = import.meta.env.VITE_MERCHANT_NAME || 'Mahaseth Mobile All Solution';
   const TERMINAL_ID = import.meta.env.VITE_TERMINAL_ID || '2222610015419744';
   const MERCHANT_ADDRESS = import.meta.env.VITE_MERCHANT_ADDRESS || 'Kshireshwarnath MC';
-  const QR_CODE_URL = import.meta.env.VITE_QR_CODE_URL || '';
+  const KHALTI_MERCHANT_ID = import.meta.env.VITE_KHALTI_MERCHANT_ID || 'MERCHANT_ID';
+  const ESEWA_MERCHANT_CODE = import.meta.env.VITE_ESEWA_MERCHANT_CODE || 'MERCHANT_CODE';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
 
-  const handleMobileWallet = (method: string) => {
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isProcessing) {
+        setIsProcessing(false);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isProcessing]);
+
+  const handleKhalti = () => {
     setIsLoading(true);
-    setSelectedMethod(method);
-    setShowQRModal(true);
-    setIsLoading(false);
+    setSelectedMethod('Khalti by IME');
+    const amount = (totalAmount * 100).toFixed(0);
+    const khaltiLink = `khalti://pay?amount=${amount}&merchant_id=${encodeURIComponent(KHALTI_MERCHANT_ID)}&transaction_uuid=${Date.now()}&product_name=${encodeURIComponent(product.title)}&product_url=&product_category=&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
+
+    setIsProcessing(true);
+    window.location.href = khaltiLink;
+
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
   };
 
-  const handlePaymentDone = () => {
-    alert(`Thank you! Payment via ${selectedMethod} received. Your order will be processed shortly.`);
-    setShowQRModal(false);
-    navigate('/');
+  const handleESewa = () => {
+    setIsLoading(true);
+    setSelectedMethod('eSewa');
+    const amount = totalAmount.toFixed(2);
+    const sewaLink = `esewa://pay?amount=${amount}&merchant_code=${encodeURIComponent(ESEWA_MERCHANT_CODE)}&ref_id=${Date.now()}&product_name=${encodeURIComponent(product.title)}`;
+
+    setIsProcessing(true);
+    window.location.href = sewaLink;
+
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
   };
 
   const handleCOD = () => {
@@ -50,16 +77,16 @@ export default function PaymentGateway() {
     {
       id: 'khalti',
       name: 'Khalti by IME',
-      subtitle: 'Mobile Wallet - Scan QR to pay',
+      subtitle: 'Mobile Wallet - Opens instantly',
       icon: 'https://khalti.s3.amazonaws.com/image/KHT.png',
-      action: () => handleMobileWallet('Khalti by IME'),
+      action: handleKhalti,
     },
     {
       id: 'esewa',
       name: 'eSewa Mobile Wallet',
-      subtitle: 'eSewa - Scan QR to pay',
+      subtitle: 'eSewa - Opens instantly',
       icon: 'https://esewa.com.np/assets/esewa_og.png',
-      action: () => handleMobileWallet('eSewa'),
+      action: handleESewa,
     },
     {
       id: 'cod',
@@ -69,6 +96,31 @@ export default function PaymentGateway() {
       action: handleCOD,
     },
   ];
+
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-8 text-center">
+          <div className="flex justify-center mb-6">
+            <Loader className="w-12 h-12 text-orange-600 animate-spin" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Opening {selectedMethod}</h2>
+          <p className="text-gray-600 mb-4">Your payment app is opening. Please complete the payment.</p>
+          <p className="text-sm text-gray-500">Amount: Rs. {totalAmount}</p>
+          <p className="text-sm text-gray-500 mt-2">Product: {product.title}</p>
+          <button
+            onClick={() => {
+              setIsProcessing(false);
+              setIsLoading(false);
+            }}
+            className="mt-6 w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -122,76 +174,6 @@ export default function PaymentGateway() {
           <span className="text-orange-600">Rs. {totalAmount}</span>
         </div>
       </div>
-
-      {showQRModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Scan to Pay</h3>
-              <button
-                onClick={() => setShowQRModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-4 flex items-center justify-center min-h-80">
-              {QR_CODE_URL ? (
-                <img src={QR_CODE_URL} alt="Payment QR Code" className="w-full h-full object-contain" />
-              ) : (
-                <div className="text-center">
-                  <div className="w-48 h-48 bg-white border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-                    <span className="text-gray-500">QR Code will be displayed here</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 space-y-3">
-              <div>
-                <p className="text-xs text-gray-600">Payment Method</p>
-                <p className="font-semibold text-gray-900">{selectedMethod}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Amount</p>
-                <p className="font-semibold text-lg text-orange-600">Rs. {totalAmount}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Merchant</p>
-                <p className="font-semibold text-gray-900">{MERCHANT_NAME}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Terminal ID</p>
-                <p className="font-semibold text-gray-900">{TERMINAL_ID}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600">Address</p>
-                <p className="font-semibold text-gray-900">{MERCHANT_ADDRESS}</p>
-              </div>
-            </div>
-
-            <p className="text-sm text-blue-700 bg-blue-50 p-3 rounded mb-4">
-              Scan the QR code with your {selectedMethod} app to complete payment
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handlePaymentDone}
-                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
-              >
-                Payment Done
-              </button>
-              <button
-                onClick={() => setShowQRModal(false)}
-                className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
