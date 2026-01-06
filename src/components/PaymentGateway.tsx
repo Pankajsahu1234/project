@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { ChevronRight, Banknote, Loader } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Banknote, Loader, AlertCircle } from 'lucide-react';
 
 interface Product {
   image: string;
@@ -22,50 +22,98 @@ export default function PaymentGateway() {
   const MERCHANT_NAME = import.meta.env.VITE_MERCHANT_NAME || 'Mahaseth Mobile All Solution';
   const TERMINAL_ID = import.meta.env.VITE_TERMINAL_ID || '2222610015419744';
   const MERCHANT_ADDRESS = import.meta.env.VITE_MERCHANT_ADDRESS || 'Kshireshwarnath MC';
-  const KHALTI_MERCHANT_ID = import.meta.env.VITE_KHALTI_MERCHANT_ID || 'MERCHANT_ID';
-  const ESEWA_MERCHANT_CODE = import.meta.env.VITE_ESEWA_MERCHANT_CODE || 'MERCHANT_CODE';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  useEffect(() => {
-    const handleFocus = () => {
-      if (isProcessing) {
-        setIsProcessing(false);
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [isProcessing]);
-
-  const handleKhalti = () => {
+  const processPayment = async (method: string) => {
     setIsLoading(true);
-    setSelectedMethod('Khalti by IME');
-    const amount = (totalAmount * 100).toFixed(0);
-    const khaltiLink = `khalti://pay?amount=${amount}&merchant_id=${encodeURIComponent(KHALTI_MERCHANT_ID)}&transaction_uuid=${Date.now()}&product_name=${encodeURIComponent(product.title)}&product_url=&product_category=&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
+    setError('');
+    setSelectedMethod(method);
 
-    setIsProcessing(true);
-    window.location.href = khaltiLink;
+    try {
+      const transactionRef = `TXN${Date.now()}`;
 
-    setTimeout(() => {
+      const paymentData = {
+        product_title: product.title,
+        quantity,
+        amount: totalAmount,
+        payment_method: method,
+        transaction_ref: transactionRef,
+        status: 'pending',
+      };
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/process-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          ...paymentData,
+          terminal_id: TERMINAL_ID,
+          merchant_name: MERCHANT_NAME,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Payment processing failed');
+      }
+
+      const data = await response.json();
+
+      if (data.paymentLink) {
+        window.open(data.paymentLink, '_blank');
+        setIsProcessing(true);
+        setShowPaymentModal(true);
+      } else {
+        setError('Unable to generate payment link');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment processing failed');
+      console.error('Payment error:', err);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleESewa = () => {
-    setIsLoading(true);
-    setSelectedMethod('eSewa');
-    const amount = totalAmount.toFixed(2);
-    const sewaLink = `esewa://pay?amount=${amount}&merchant_code=${encodeURIComponent(ESEWA_MERCHANT_CODE)}&ref_id=${Date.now()}&product_name=${encodeURIComponent(product.title)}`;
+  const handleKhalti = async () => {
+    await processPayment('Khalti');
+  };
 
-    setIsProcessing(true);
-    window.location.href = sewaLink;
+  const handleESewa = async () => {
+    await processPayment('eSewa');
+  };
 
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+  const handleFonePay = async () => {
+    await processPayment('FonePay');
+  };
+
+  const handlePaymentCompleted = async () => {
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/process-payment`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          status: 'completed',
+        }),
+      });
+
+      alert(`Payment via ${selectedMethod} completed successfully!`);
+      setShowPaymentModal(false);
+      setIsProcessing(false);
+      navigate('/');
+    } catch (err) {
+      setError('Failed to confirm payment');
+    }
   };
 
   const handleCOD = () => {
@@ -77,16 +125,23 @@ export default function PaymentGateway() {
     {
       id: 'khalti',
       name: 'Khalti by IME',
-      subtitle: 'Mobile Wallet - Opens instantly',
+      subtitle: 'Mobile Wallet - Fast & Secure',
       icon: 'https://khalti.s3.amazonaws.com/image/KHT.png',
       action: handleKhalti,
     },
     {
       id: 'esewa',
       name: 'eSewa Mobile Wallet',
-      subtitle: 'eSewa - Opens instantly',
+      subtitle: 'eSewa - Fast & Secure',
       icon: 'https://esewa.com.np/assets/esewa_og.png',
       action: handleESewa,
+    },
+    {
+      id: 'fonepay',
+      name: 'FonePay',
+      subtitle: 'Mobile Payment - Fast & Secure',
+      icon: 'https://www.fonepay.com/assets/img/logo.png',
+      action: handleFonePay,
     },
     {
       id: 'cod',
@@ -97,37 +152,19 @@ export default function PaymentGateway() {
     },
   ];
 
-  if (isProcessing) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-lg shadow p-8 text-center">
-          <div className="flex justify-center mb-6">
-            <Loader className="w-12 h-12 text-orange-600 animate-spin" />
-          </div>
-          <h2 className="text-2xl font-bold mb-2">Opening {selectedMethod}</h2>
-          <p className="text-gray-600 mb-4">Your payment app is opening. Please complete the payment.</p>
-          <p className="text-sm text-gray-500">Amount: Rs. {totalAmount}</p>
-          <p className="text-sm text-gray-500 mt-2">Product: {product.title}</p>
-          <button
-            onClick={() => {
-              setIsProcessing(false);
-              setIsLoading(false);
-            }}
-            className="mt-6 w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow">
         <div className="border-b px-6 py-4">
           <h1 className="text-2xl font-bold">Select Payment Method</h1>
         </div>
+
+        {error && (
+          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
 
         <div className="divide-y">
           {paymentMethods.map((method) => (
@@ -174,6 +211,51 @@ export default function PaymentGateway() {
           <span className="text-orange-600">Rs. {totalAmount}</span>
         </div>
       </div>
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-center mb-6">
+              <Loader className="w-12 h-12 text-orange-600 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold text-center mb-2">{selectedMethod} Payment</h2>
+            <p className="text-gray-600 text-center mb-4">Payment window opened. Complete the payment in the opened window and click button below.</p>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Amount:</span>
+                <span className="font-semibold">Rs. {totalAmount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Method:</span>
+                <span className="font-semibold">{selectedMethod}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Merchant:</span>
+                <span className="font-semibold text-sm">{MERCHANT_NAME}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handlePaymentCompleted}
+                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+              >
+                Payment Done
+              </button>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setIsProcessing(false);
+                }}
+                className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
