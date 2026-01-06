@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { ChevronRight, Banknote, Loader, AlertCircle } from 'lucide-react';
+import { ChevronRight, Banknote, Loader } from 'lucide-react';
 
 interface Product {
   image: string;
@@ -19,101 +19,51 @@ export default function PaymentGateway() {
   const navigate = useNavigate();
   const { product, quantity, totalAmount } = location.state as LocationState;
 
-  const MERCHANT_NAME = import.meta.env.VITE_MERCHANT_NAME || 'Mahaseth Mobile All Solution';
-  const TERMINAL_ID = import.meta.env.VITE_TERMINAL_ID || '2222610015419744';
-  const MERCHANT_ADDRESS = import.meta.env.VITE_MERCHANT_ADDRESS || 'Kshireshwarnath MC';
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const MERCHANT_NAME = 'Mahaseth Mobile All Solution';
+  const TERMINAL_ID = '2222610015419744';
+  const MERCHANT_ADDRESS = 'Kshireshwarnath MC';
 
-  const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [error, setError] = useState<string>('');
 
-  const processPayment = async (method: string) => {
-    setIsLoading(true);
-    setError('');
+  const generateKhaltiDeepLink = (): string => {
+    const amountInPaisa = Math.floor(totalAmount * 100);
+    return `khalti://pay?amount=${amountInPaisa}&transaction_uuid=${Date.now()}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
+  };
+
+  const generateESewaDeepLink = (): string => {
+    return `esewa://pay?amount=${totalAmount}&ref_id=${Date.now()}&product_name=${encodeURIComponent(product.title)}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
+  };
+
+  const generateFonePayDeepLink = (): string => {
+    return `fonepay://pay?amount=${totalAmount}&transaction_id=${Date.now()}&terminal_id=${TERMINAL_ID}&product_name=${encodeURIComponent(product.title)}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
+  };
+
+  const initiatePayment = (method: string, deepLink: string) => {
     setSelectedMethod(method);
+    setIsProcessing(true);
 
     try {
-      const transactionRef = `TXN${Date.now()}`;
-
-      const paymentData = {
-        product_title: product.title,
-        quantity,
-        amount: totalAmount,
-        payment_method: method,
-        transaction_ref: transactionRef,
-        status: 'pending',
-      };
-
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/process-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          ...paymentData,
-          terminal_id: TERMINAL_ID,
-          merchant_name: MERCHANT_NAME,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Payment processing failed');
-      }
-
-      const data = await response.json();
-
-      if (data.paymentLink) {
-        window.open(data.paymentLink, '_blank');
-        setIsProcessing(true);
-        setShowPaymentModal(true);
-      } else {
-        setError('Unable to generate payment link');
-      }
+      window.location.href = deepLink;
+      setTimeout(() => {
+        setIsProcessing(false);
+      }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment processing failed');
       console.error('Payment error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKhalti = async () => {
-    await processPayment('Khalti');
-  };
-
-  const handleESewa = async () => {
-    await processPayment('eSewa');
-  };
-
-  const handleFonePay = async () => {
-    await processPayment('FonePay');
-  };
-
-  const handlePaymentCompleted = async () => {
-    try {
-      await fetch(`${SUPABASE_URL}/functions/v1/process-payment`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          status: 'completed',
-        }),
-      });
-
-      alert(`Payment via ${selectedMethod} completed successfully!`);
-      setShowPaymentModal(false);
       setIsProcessing(false);
-      navigate('/');
-    } catch (err) {
-      setError('Failed to confirm payment');
     }
+  };
+
+  const handleKhalti = () => {
+    initiatePayment('Khalti by IME', generateKhaltiDeepLink());
+  };
+
+  const handleESewa = () => {
+    initiatePayment('eSewa', generateESewaDeepLink());
+  };
+
+  const handleFonePay = () => {
+    initiatePayment('FonePay', generateFonePayDeepLink());
   };
 
   const handleCOD = () => {
@@ -125,21 +75,21 @@ export default function PaymentGateway() {
     {
       id: 'khalti',
       name: 'Khalti by IME',
-      subtitle: 'Mobile Wallet - Fast & Secure',
+      subtitle: 'Opens Khalti app to pay via FonePay',
       icon: 'https://khalti.s3.amazonaws.com/image/KHT.png',
       action: handleKhalti,
     },
     {
       id: 'esewa',
       name: 'eSewa Mobile Wallet',
-      subtitle: 'eSewa - Fast & Secure',
+      subtitle: 'Opens eSewa app to pay via FonePay',
       icon: 'https://esewa.com.np/assets/esewa_og.png',
       action: handleESewa,
     },
     {
       id: 'fonepay',
       name: 'FonePay',
-      subtitle: 'Mobile Payment - Fast & Secure',
+      subtitle: 'Direct payment to FonePay account',
       icon: 'https://www.fonepay.com/assets/img/logo.png',
       action: handleFonePay,
     },
@@ -152,27 +102,56 @@ export default function PaymentGateway() {
     },
   ];
 
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-lg shadow p-8 text-center">
+          <div className="flex justify-center mb-6">
+            <Loader className="w-12 h-12 text-orange-600 animate-spin" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Opening {selectedMethod}</h2>
+          <p className="text-gray-600 mb-6">Please complete the payment in the payment app.</p>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Amount:</span>
+              <span className="font-semibold">Rs. {totalAmount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Terminal:</span>
+              <span className="font-semibold text-sm">{TERMINAL_ID}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Merchant:</span>
+              <span className="font-semibold text-sm">{MERCHANT_NAME}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsProcessing(false)}
+            className="w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
+          >
+            Back to Payment Methods
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow">
         <div className="border-b px-6 py-4">
           <h1 className="text-2xl font-bold">Select Payment Method</h1>
+          <p className="text-sm text-gray-600 mt-1">All payments credited to: {MERCHANT_NAME}</p>
         </div>
-
-        {error && (
-          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-red-700">{error}</p>
-          </div>
-        )}
 
         <div className="divide-y">
           {paymentMethods.map((method) => (
             <button
               key={method.id}
               onClick={method.action}
-              disabled={isLoading}
-              className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-100 disabled:opacity-50 transition"
+              className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-100 transition"
             >
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-gray-100 rounded flex items-center justify-center">
@@ -211,51 +190,6 @@ export default function PaymentGateway() {
           <span className="text-orange-600">Rs. {totalAmount}</span>
         </div>
       </div>
-
-      {showPaymentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-center mb-6">
-              <Loader className="w-12 h-12 text-orange-600 animate-spin" />
-            </div>
-            <h2 className="text-2xl font-bold text-center mb-2">{selectedMethod} Payment</h2>
-            <p className="text-gray-600 text-center mb-4">Payment window opened. Complete the payment in the opened window and click button below.</p>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Amount:</span>
-                <span className="font-semibold">Rs. {totalAmount}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Method:</span>
-                <span className="font-semibold">{selectedMethod}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Merchant:</span>
-                <span className="font-semibold text-sm">{MERCHANT_NAME}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handlePaymentCompleted}
-                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
-              >
-                Payment Done
-              </button>
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setIsProcessing(false);
-                }}
-                className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-semibold hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
