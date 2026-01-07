@@ -26,47 +26,58 @@ export default function PaymentGateway() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
 
-  const generateKhaltiDeepLink = (): string => {
-    const amountInPaisa = Math.floor(totalAmount * 100);
-    return `khalti://splash?token=${Date.now()}&amount=${amountInPaisa}&product_name=${encodeURIComponent(product.title)}&product_url=undefined&product_category=&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&public_key=test_public_key_do_not_modify_hJg922FW92EL92d&transaction_uuid=${Date.now()}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
-  };
-
-  const generateESewaDeepLink = (): string => {
-    const refId = `${Date.now()}`;
-    return `esewa://pay/merchant/details?scd=EPAYTEST&pid=${refId}&amt=${totalAmount}&psc=0&pdc=0&txAmt=0&tAmt=${totalAmount}&su=undefined&fu=undefined`;
-  };
-
-  const generateFonePayDeepLink = (): string => {
-    return `fonepay://transaction/initiate?amount=${totalAmount}&transaction_uuid=${Date.now()}&terminal_id=${TERMINAL_ID}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
-  };
-
-  const initiatePayment = (method: string, deepLink: string) => {
-    setSelectedMethod(method);
-    setIsProcessing(true);
-
-    const timeout = setTimeout(() => {
-      setIsProcessing(false);
-    }, 2500);
-
-    try {
-      window.location.href = deepLink;
-    } catch (err) {
-      clearTimeout(timeout);
-      console.error('Payment error:', err);
-      setIsProcessing(false);
-    }
-  };
-
   const handleKhalti = () => {
-    initiatePayment('Khalti by IME', generateKhaltiDeepLink());
+    setSelectedMethod('Khalti by IME');
+    setIsProcessing(true);
+    const amountInPaisa = Math.floor(totalAmount * 100);
+    const khaltiUrl = `https://khalti.com/api/payment/initiate/?amount=${amountInPaisa}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}&website_url=${encodeURIComponent(window.location.origin)}&product_identity=${Date.now()}&product_name=${encodeURIComponent(product.title)}`;
+
+    setTimeout(() => {
+      window.location.href = khaltiUrl;
+    }, 500);
   };
 
   const handleESewa = () => {
-    initiatePayment('eSewa', generateESewaDeepLink());
+    setSelectedMethod('eSewa');
+    setIsProcessing(true);
+    const esewaUrl = `https://esewa.com.np/epay/main`;
+    const params = new URLSearchParams({
+      amt: totalAmount.toString(),
+      psc: '0',
+      pdc: '0',
+      txAmt: '0',
+      tAmt: totalAmount.toString(),
+      pid: `${Date.now()}`,
+      scd: MERCHANT_NAME,
+      su: window.location.origin + '/payment-success',
+      fu: window.location.origin + '/payment-failed'
+    });
+
+    setTimeout(() => {
+      window.location.href = `${esewaUrl}?${params.toString()}`;
+    }, 500);
   };
 
   const handleFonePay = () => {
-    initiatePayment('FonePay', generateFonePayDeepLink());
+    setSelectedMethod('FonePay');
+    setIsProcessing(true);
+    const fonepayUrl = `https://www.fonepay.com/services/`;
+    const params = new URLSearchParams({
+      amt: totalAmount.toString(),
+      txn: `${Date.now()}`,
+      prd: encodeURIComponent(product.title),
+      mrn: encodeURIComponent(MERCHANT_NAME),
+      crncy: 'NPR',
+      mel: 'test@example.com',
+      mpc: TERMINAL_ID,
+      md: 'W',
+      su: window.location.origin + '/payment-success',
+      fu: window.location.origin + '/payment-failed'
+    });
+
+    setTimeout(() => {
+      window.location.href = `${fonepayUrl}?${params.toString()}`;
+    }, 500);
   };
 
   const handleCOD = () => {
@@ -78,21 +89,21 @@ export default function PaymentGateway() {
     {
       id: 'khalti',
       name: 'Khalti by IME',
-      subtitle: 'Opens Khalti app to pay via FonePay',
+      subtitle: 'Pay securely using Khalti wallet or bank',
       icon: 'https://khalti.s3.amazonaws.com/image/KHT.png',
       action: handleKhalti,
     },
     {
       id: 'esewa',
       name: 'eSewa Mobile Wallet',
-      subtitle: 'Opens eSewa app to pay via FonePay',
+      subtitle: 'Pay securely using eSewa wallet',
       icon: 'https://esewa.com.np/assets/esewa_og.png',
       action: handleESewa,
     },
     {
       id: 'fonepay',
       name: 'FonePay',
-      subtitle: 'Direct payment to FonePay account',
+      subtitle: 'Pay directly via FonePay gateway',
       icon: 'https://www.fonepay.com/assets/img/logo.png',
       action: handleFonePay,
     },
@@ -112,10 +123,10 @@ export default function PaymentGateway() {
           <div className="flex justify-center mb-6">
             <Loader className="w-12 h-12 text-orange-600 animate-spin" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Opening {selectedMethod}</h2>
-          <p className="text-gray-600 mb-2">Launching your payment app...</p>
+          <h2 className="text-2xl font-bold mb-2">Processing with {selectedMethod}</h2>
+          <p className="text-gray-600 mb-2">Redirecting to payment page...</p>
           <p className="text-sm text-gray-500 mb-6">
-            {selectedMethod} will open automatically. If it doesn't open within 3 seconds, please ensure the app is installed on your device.
+            You will be taken to {selectedMethod} payment page. Complete payment there and you will be redirected back.
           </p>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
@@ -134,11 +145,11 @@ export default function PaymentGateway() {
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6 text-left">
-            <p className="text-sm font-semibold text-amber-900 mb-2">App not opening?</p>
+            <p className="text-sm font-semibold text-amber-900 mb-2">Page not loading?</p>
             <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-              <li>Make sure {selectedMethod} app is installed</li>
-              <li>Check your app is updated to latest version</li>
-              <li>If using on web, use a mobile device for payment</li>
+              <li>Check your internet connection</li>
+              <li>Make sure to allow pop-ups and redirects</li>
+              <li>If stuck, click Back and try another payment method</li>
             </ol>
           </div>
 
