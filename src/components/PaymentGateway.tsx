@@ -28,27 +28,30 @@ export default function PaymentGateway() {
 
   const generateKhaltiDeepLink = (): string => {
     const amountInPaisa = Math.floor(totalAmount * 100);
-    return `khalti://pay?amount=${amountInPaisa}&transaction_uuid=${Date.now()}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
+    return `khalti://splash?token=${Date.now()}&amount=${amountInPaisa}&product_name=${encodeURIComponent(product.title)}&product_url=undefined&product_category=&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&public_key=test_public_key_do_not_modify_hJg922FW92EL92d&transaction_uuid=${Date.now()}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
   };
 
   const generateESewaDeepLink = (): string => {
-    return `esewa://pay?amount=${totalAmount}&ref_id=${Date.now()}&product_name=${encodeURIComponent(product.title)}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
+    const refId = `${Date.now()}`;
+    return `esewa://pay/merchant/details?scd=EPAYTEST&pid=${refId}&amt=${totalAmount}&psc=0&pdc=0&txAmt=0&tAmt=${totalAmount}&su=undefined&fu=undefined`;
   };
 
   const generateFonePayDeepLink = (): string => {
-    return `fonepay://pay?amount=${totalAmount}&transaction_id=${Date.now()}&terminal_id=${TERMINAL_ID}&product_name=${encodeURIComponent(product.title)}&merchant=${encodeURIComponent(MERCHANT_NAME)}`;
+    return `fonepay://transaction/initiate?amount=${totalAmount}&transaction_uuid=${Date.now()}&terminal_id=${TERMINAL_ID}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}`;
   };
 
   const initiatePayment = (method: string, deepLink: string) => {
     setSelectedMethod(method);
     setIsProcessing(true);
 
+    const timeout = setTimeout(() => {
+      setIsProcessing(false);
+    }, 2500);
+
     try {
       window.location.href = deepLink;
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 2000);
     } catch (err) {
+      clearTimeout(timeout);
       console.error('Payment error:', err);
       setIsProcessing(false);
     }
@@ -110,7 +113,10 @@ export default function PaymentGateway() {
             <Loader className="w-12 h-12 text-orange-600 animate-spin" />
           </div>
           <h2 className="text-2xl font-bold mb-2">Opening {selectedMethod}</h2>
-          <p className="text-gray-600 mb-6">Please complete the payment in the payment app.</p>
+          <p className="text-gray-600 mb-2">Launching your payment app...</p>
+          <p className="text-sm text-gray-500 mb-6">
+            {selectedMethod} will open automatically. If it doesn't open within 3 seconds, please ensure the app is installed on your device.
+          </p>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
             <div className="flex justify-between">
@@ -125,6 +131,15 @@ export default function PaymentGateway() {
               <span className="text-gray-600">Merchant:</span>
               <span className="font-semibold text-sm">{MERCHANT_NAME}</span>
             </div>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6 text-left">
+            <p className="text-sm font-semibold text-amber-900 mb-2">App not opening?</p>
+            <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
+              <li>Make sure {selectedMethod} app is installed</li>
+              <li>Check your app is updated to latest version</li>
+              <li>If using on web, use a mobile device for payment</li>
+            </ol>
           </div>
 
           <button
