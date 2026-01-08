@@ -26,58 +26,59 @@ export default function PaymentGateway() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<string>('');
 
-  const handleKhalti = () => {
-    setSelectedMethod('Khalti by IME');
+  const initiatePaymentWithFallback = (method: string, deepLink: string, webUrl: string) => {
+    setSelectedMethod(method);
     setIsProcessing(true);
-    const amountInPaisa = Math.floor(totalAmount * 100);
-    const khaltiUrl = `https://khalti.com/api/payment/initiate/?amount=${amountInPaisa}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}&website_url=${encodeURIComponent(window.location.origin)}&product_identity=${Date.now()}&product_name=${encodeURIComponent(product.title)}`;
 
-    setTimeout(() => {
-      window.location.href = khaltiUrl;
-    }, 500);
+    const timeout = setTimeout(() => {
+      window.location.href = webUrl;
+    }, 1500);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearTimeout(timeout);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    window.location.href = deepLink;
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearTimeout(timeout);
+    };
+  };
+
+  const handleKhalti = () => {
+    const transactionId = `${Date.now()}`;
+    const amountInPaisa = Math.floor(totalAmount * 100);
+
+    const deepLink = `khalti://splash?token=${transactionId}&amount=${amountInPaisa}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&public_key=test_public_key_do_not_modify_hJg922FW92EL92d&transaction_uuid=${transactionId}`;
+
+    const webUrl = `https://khalti.com/api/payment/initiate/?amount=${amountInPaisa}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}&website_url=${encodeURIComponent(window.location.origin)}&product_identity=${transactionId}&product_name=${encodeURIComponent(product.title)}`;
+
+    initiatePaymentWithFallback('Khalti by IME', deepLink, webUrl);
   };
 
   const handleESewa = () => {
-    setSelectedMethod('eSewa');
-    setIsProcessing(true);
-    const esewaUrl = `https://esewa.com.np/epay/main`;
-    const params = new URLSearchParams({
-      amt: totalAmount.toString(),
-      psc: '0',
-      pdc: '0',
-      txAmt: '0',
-      tAmt: totalAmount.toString(),
-      pid: `${Date.now()}`,
-      scd: MERCHANT_NAME,
-      su: window.location.origin + '/payment-success',
-      fu: window.location.origin + '/payment-failed'
-    });
+    const transactionId = `${Date.now()}`;
 
-    setTimeout(() => {
-      window.location.href = `${esewaUrl}?${params.toString()}`;
-    }, 500);
+    const deepLink = `esewa://pay/merchant/details?scd=EPAYTEST&pid=${transactionId}&amt=${totalAmount}&psc=0&pdc=0&txAmt=0&tAmt=${totalAmount}&su=${encodeURIComponent(window.location.origin + '/payment-success')}&fu=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
+
+    const webUrl = `https://esewa.com.np/epay/main?amt=${totalAmount}&psc=0&pdc=0&txAmt=0&tAmt=${totalAmount}&pid=${transactionId}&scd=EPAYTEST&su=${encodeURIComponent(window.location.origin + '/payment-success')}&fu=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
+
+    initiatePaymentWithFallback('eSewa', deepLink, webUrl);
   };
 
   const handleFonePay = () => {
-    setSelectedMethod('FonePay');
-    setIsProcessing(true);
-    const fonepayUrl = `https://www.fonepay.com/services/`;
-    const params = new URLSearchParams({
-      amt: totalAmount.toString(),
-      txn: `${Date.now()}`,
-      prd: encodeURIComponent(product.title),
-      mrn: encodeURIComponent(MERCHANT_NAME),
-      crncy: 'NPR',
-      mel: 'test@example.com',
-      mpc: TERMINAL_ID,
-      md: 'W',
-      su: window.location.origin + '/payment-success',
-      fu: window.location.origin + '/payment-failed'
-    });
+    const transactionId = `${Date.now()}`;
 
-    setTimeout(() => {
-      window.location.href = `${fonepayUrl}?${params.toString()}`;
-    }, 500);
+    const deepLink = `fonepay://transaction/initiate?amount=${totalAmount}&transaction_uuid=${transactionId}&terminal_id=${TERMINAL_ID}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}`;
+
+    const webUrl = `https://www.fonepay.com/services/?amt=${totalAmount}&txn=${transactionId}&prd=${encodeURIComponent(product.title)}&mrn=${encodeURIComponent(MERCHANT_NAME)}&crncy=NPR&mel=test@example.com&mpc=${TERMINAL_ID}&md=W&su=${encodeURIComponent(window.location.origin + '/payment-success')}&fu=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
+
+    initiatePaymentWithFallback('FonePay', deepLink, webUrl);
   };
 
   const handleCOD = () => {
