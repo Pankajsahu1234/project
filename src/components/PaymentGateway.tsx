@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronRight, Banknote, Loader } from 'lucide-react';
 
 interface Product {
@@ -19,74 +19,37 @@ export default function PaymentGateway() {
   const navigate = useNavigate();
   const { product, quantity, totalAmount } = location.state as LocationState;
 
-  const MERCHANT_NAME = 'Mahaseth Mobile All Solution';
-  const TERMINAL_ID = '2222610015419744';
-  const MERCHANT_ADDRESS = 'Kshireshwarnath MC';
+  const UPI_ID = import.meta.env.VITE_UPI_ID || 'rishabhjhade060-1@oksbi';
+  const PAYEE_NAME = import.meta.env.VITE_PAYEE_NAME || 'Store Name';
 
+  const [isLoading, setIsLoading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<string>('');
 
-  const isMobileDevice = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
-
-  const initiatePayment = (method: string, deepLink: string, webUrl: string) => {
-    setSelectedMethod(method);
-    setIsProcessing(true);
-
-    if (!isMobileDevice()) {
-      window.location.href = webUrl;
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      window.location.href = webUrl;
-    }, 1500);
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        clearTimeout(timeout);
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isProcessing) {
+        setIsProcessing(false);
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.location.href = deepLink;
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [isProcessing]);
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearTimeout(timeout);
-    };
-  };
+  const handleUPIPayment = () => {
+    setIsLoading(true);
+    const amount = totalAmount.toFixed(2);
+    const transactionNote = `Order: ${product.title.substring(0, 30)}`;
+    const upiLink = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(PAYEE_NAME)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
 
-  const handleKhalti = () => {
-    const transactionId = `${Date.now()}`;
-    const amountInPaisa = Math.floor(totalAmount * 100);
+    console.log('Opening UPI App with link:', upiLink);
 
-    const deepLink = `khalti://splash?token=${transactionId}&amount=${amountInPaisa}&product_name=${encodeURIComponent(product.title)}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&public_key=test_public_key_do_not_modify_hJg922FW92EL92d&transaction_uuid=${transactionId}`;
+    setIsProcessing(true);
+    window.location.href = upiLink;
 
-    const webUrl = `https://web.khalti.com/?amount=${amountInPaisa}&merchant_name=${encodeURIComponent(MERCHANT_NAME)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}&website_url=${encodeURIComponent(window.location.origin)}&product_identity=${transactionId}&product_name=${encodeURIComponent(product.title)}`;
-
-    initiatePayment('Khalti by IME', deepLink, webUrl);
-  };
-
-  const handleESewa = () => {
-    const transactionId = `${Date.now()}`;
-
-    const deepLink = `esewa://pay?scd=EPAYTEST&pid=${transactionId}&amt=${totalAmount}&su=${encodeURIComponent(window.location.origin + '/payment-success')}&fu=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
-
-    const webUrl = `https://esewa.com.np/epay/main?amt=${totalAmount}&psc=0&pdc=0&txAmt=0&tAmt=${totalAmount}&pid=${transactionId}&scd=EPAYTEST&su=${encodeURIComponent(window.location.origin + '/payment-success')}&fu=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
-
-    initiatePayment('eSewa', deepLink, webUrl);
-  };
-
-  const handleFonePay = () => {
-    const transactionId = `${Date.now()}`;
-
-    const deepLink = `fonepay://pay?amount=${totalAmount}&txn=${transactionId}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}`;
-
-    const webUrl = `https://www.fonepay.com/?amount=${totalAmount}&txn=${transactionId}&product=${encodeURIComponent(product.title)}&return_url=${encodeURIComponent(window.location.origin + '/payment-success')}&failure_url=${encodeURIComponent(window.location.origin + '/payment-failed')}`;
-
-    initiatePayment('FonePay', deepLink, webUrl);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
   };
 
   const handleCOD = () => {
@@ -96,25 +59,18 @@ export default function PaymentGateway() {
 
   const paymentMethods = [
     {
-      id: 'khalti',
-      name: 'Khalti by IME',
-      subtitle: 'Pay securely using Khalti wallet or bank',
-      icon: 'https://khalti.s3.amazonaws.com/image/KHT.png',
-      action: handleKhalti,
+      id: 'gpay',
+      name: 'Google Pay / PhonePe',
+      subtitle: 'UPI Payment - Opens instantly',
+      icon: 'https://www.gstatic.com/images/branding/product/1x/gpay_48dp.png',
+      action: handleUPIPayment,
     },
     {
-      id: 'esewa',
-      name: 'eSewa Mobile Wallet',
-      subtitle: 'Pay securely using eSewa wallet',
-      icon: 'https://esewa.com.np/assets/esewa_og.png',
-      action: handleESewa,
-    },
-    {
-      id: 'fonepay',
-      name: 'FonePay',
-      subtitle: 'Pay directly via FonePay gateway',
-      icon: 'https://www.fonepay.com/assets/img/logo.png',
-      action: handleFonePay,
+      id: 'upi',
+      name: 'Any UPI App',
+      subtitle: 'Paytm, BHIM, etc. - Opens instantly',
+      icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/UPI-Logo-vector.svg/200px-UPI-Logo-vector.svg.png',
+      action: handleUPIPayment,
     },
     {
       id: 'cod',
@@ -132,41 +88,18 @@ export default function PaymentGateway() {
           <div className="flex justify-center mb-6">
             <Loader className="w-12 h-12 text-orange-600 animate-spin" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Processing with {selectedMethod}</h2>
-          <p className="text-gray-600 mb-2">Redirecting to payment page...</p>
-          <p className="text-sm text-gray-500 mb-6">
-            You will be taken to {selectedMethod} payment page. Complete payment there and you will be redirected back.
-          </p>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Amount:</span>
-              <span className="font-semibold">Rs. {totalAmount}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Terminal:</span>
-              <span className="font-semibold text-sm">{TERMINAL_ID}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Merchant:</span>
-              <span className="font-semibold text-sm">{MERCHANT_NAME}</span>
-            </div>
-          </div>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6 text-left">
-            <p className="text-sm font-semibold text-amber-900 mb-2">Page not loading?</p>
-            <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
-              <li>Check your internet connection</li>
-              <li>Make sure to allow pop-ups and redirects</li>
-              <li>If stuck, click Back and try another payment method</li>
-            </ol>
-          </div>
-
+          <h2 className="text-2xl font-bold mb-2">Opening UPI App</h2>
+          <p className="text-gray-600 mb-4">Your UPI app is opening. Please complete the payment.</p>
+          <p className="text-sm text-gray-500">Amount: Rs. {totalAmount}</p>
+          <p className="text-sm text-gray-500 mt-2">Receiving UPI: {UPI_ID}</p>
           <button
-            onClick={() => setIsProcessing(false)}
-            className="w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
+            onClick={() => {
+              setIsProcessing(false);
+              setIsLoading(false);
+            }}
+            className="mt-6 w-full bg-gray-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition"
           >
-            Back to Payment Methods
+            Cancel
           </button>
         </div>
       </div>
@@ -178,7 +111,6 @@ export default function PaymentGateway() {
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow">
         <div className="border-b px-6 py-4">
           <h1 className="text-2xl font-bold">Select Payment Method</h1>
-          <p className="text-sm text-gray-600 mt-1">All payments credited to: {MERCHANT_NAME}</p>
         </div>
 
         <div className="divide-y">
@@ -186,7 +118,8 @@ export default function PaymentGateway() {
             <button
               key={method.id}
               onClick={method.action}
-              className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-100 transition"
+              disabled={isLoading}
+              className="w-full flex items-center justify-between px-6 py-5 hover:bg-gray-100 disabled:opacity-50 transition"
             >
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-gray-100 rounded flex items-center justify-center">
